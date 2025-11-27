@@ -6,16 +6,11 @@ use std::{f32::consts::{PI, TAU}, fmt::Debug};
 #[derive(Clone)]
 pub struct NoisySphere {
     pub radius: f32,
-    // noise settings
-    sampler: NoiseSampler, //todo this should be a builder as well, not the final instance
 }
 
 impl Default for NoisySphere {
     fn default() -> Self {
-        Self {
-            radius: 0.5,
-            sampler: NoiseSampler::default(),
-        }
+        Self { radius: 0.5 }
     }
 }
 
@@ -25,10 +20,6 @@ impl NoisySphere {
     }
     pub fn with_radius(mut self, radius: f32) -> Self {
         self.radius = radius;
-        self
-    }
-    pub fn with_sampler(mut self, sampler: NoiseSampler) -> Self {
-        self.sampler = sampler;
         self
     }
 }
@@ -52,15 +43,17 @@ impl Default for NoisySphereKind {
 
 #[derive(Clone, Default)]
 pub struct NoisySphereMeshBuilder {
-    pub sphere: NoisySphere,
     pub kind: NoisySphereKind,
+    pub sampler: NoiseSampler,
+    pub sphere: NoisySphere,
 }
 
 impl NoisySphereMeshBuilder {
     #[inline]
     pub fn new(radius: f32, kind: NoisySphereKind) -> Self {
         Self {
-            sphere: NoisySphere { radius, ..Default::default() },
+            sampler: NoiseSampler::None,
+            sphere: NoisySphere::new(radius),
             kind,
         }
     }
@@ -72,12 +65,18 @@ impl NoisySphereMeshBuilder {
         self
     }
 
+    #[inline]
+    pub fn sampler(mut self, sampler: NoiseSampler) -> Self {
+        self.sampler = sampler;
+        self
+    }
+
     fn cube(&self, subdivisions: u32) -> Mesh {
-        mesh(&self.sphere, CubeSphere::new(subdivisions as _, uv_transform), 12)
+        mesh(&self.sampler, &self.sphere, CubeSphere::new(subdivisions as _, uv_transform), 12)
     }
 
     fn ico(&self, subdivisions: u32) -> Mesh {
-        mesh(&self.sphere, IcoSphere::new(subdivisions as _, uv_transform), 20)
+        mesh(&self.sampler, &self.sphere, IcoSphere::new(subdivisions as _, uv_transform), 20)
     }
 }
 
@@ -122,11 +121,16 @@ fn uv_transform(point: Vec3A) -> [f32; 2] {
     [norm_azimuth, norm_inclination]
 }
 
-fn mesh<S: BaseShape>(sphere: &NoisySphere, base: Subdivided<[f32; 2], S>, faces: usize) -> Mesh {
+fn mesh<S: BaseShape>(
+    sampler: &NoiseSampler,
+    sphere: &NoisySphere,
+    base: Subdivided<[f32; 2], S>,
+    faces: usize
+) -> Mesh {
 
     let points = base.raw_points()
         .iter()
-        .map(|&point| sample_at(&sphere.sampler, point, sphere.radius).into())
+        .map(|&point| sample_at(sampler, point, sphere.radius).into())
         .collect::<Vec<[f32; 3]>>();
 
     let indices = {
