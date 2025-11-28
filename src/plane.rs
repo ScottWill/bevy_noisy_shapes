@@ -95,7 +95,13 @@ impl NoisyPlaneMeshBuilder {
     /// Sets the size of the plane mesh.
     #[inline]
     pub fn size(mut self, width: f32, height: f32) -> Self {
-        self.plane.half_size = Vec2::new(width, height) / 2.0;
+        self.plane.half_size = Vec2::new(width, height) * 0.5;
+        self
+    }
+
+    #[inline]
+    pub fn square(mut self, width: f32) -> Self {
+        self.plane.half_size = Vec2::splat(width) * 0.5;
         self
     }
 
@@ -142,7 +148,7 @@ impl MeshBuilder for NoisyPlaneMeshBuilder {
 
                 let px = (-0.5 + tx) * size.x;
                 let pz = (-0.5 + tz) * size.y;
-                let py = self.sampler.sample2d([px, pz]);
+                let py = self.sampler.sample2d([tx * size.x, tz * size.y]);
                 let pos = rotation * Vec3::new(px, py, pz);
                 positions.push(pos);
                 uvs.push([tx, tz]);
