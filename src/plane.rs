@@ -129,7 +129,6 @@ impl MeshBuilder for NoisyPlaneMeshBuilder {
         let num_indices = ((z_vertex_count - 1) * (x_vertex_count - 1) * 6) as usize;
 
         let mut positions: Vec<Vec3> = Vec::with_capacity(num_vertices);
-        let mut normals: Vec<[f32; 3]> = Vec::with_capacity(num_vertices);
         let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(num_vertices);
         let mut indices: Vec<u32> = Vec::with_capacity(num_indices);
 
@@ -146,7 +145,6 @@ impl MeshBuilder for NoisyPlaneMeshBuilder {
                 let py = self.sampler.sample2d([px, pz]);
                 let pos = rotation * Vec3::new(px, py, pz);
                 positions.push(pos);
-                normals.push(self.plane.normal.to_array());
                 uvs.push([tx, tz]);
             }
         }
@@ -169,8 +167,8 @@ impl MeshBuilder for NoisyPlaneMeshBuilder {
         )
         .with_inserted_indices(Indices::U32(indices))
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+        .with_computed_normals()
     }
 }
 
