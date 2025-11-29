@@ -38,6 +38,7 @@ pub struct NoisyPlaneMeshBuilder {
     pub subdivisions: u32,
 
     pub sampler: NoiseSampler,
+    pub offset: Vec2,
 }
 
 impl NoisyPlaneMeshBuilder {
@@ -51,6 +52,7 @@ impl NoisyPlaneMeshBuilder {
             },
             subdivisions: 0,
             sampler: NoiseSampler::None,
+            offset: Vec2::ZERO,
         }
     }
 
@@ -64,6 +66,7 @@ impl NoisyPlaneMeshBuilder {
             },
             subdivisions: 0,
             sampler: NoiseSampler::None,
+            offset: Vec2::ZERO,
         }
     }
 
@@ -78,6 +81,7 @@ impl NoisyPlaneMeshBuilder {
             },
             subdivisions: 0,
             sampler: NoiseSampler::None,
+            offset: Vec2::ZERO,
         }
     }
 
@@ -89,6 +93,13 @@ impl NoisyPlaneMeshBuilder {
             normal,
             ..self.plane
         };
+        self
+    }
+
+    /// Sets the size of the plane sampler.
+    #[inline]
+    pub fn offset(mut self, offset: Vec2) -> Self {
+        self.offset = offset;
         self
     }
 
@@ -148,7 +159,7 @@ impl MeshBuilder for NoisyPlaneMeshBuilder {
 
                 let px = (-0.5 + tx) * size.x;
                 let pz = (-0.5 + tz) * size.y;
-                let py = self.sampler.sample2d([tx * size.x, tz * size.y]);
+                let py = self.sampler.sample2d([self.offset.x + tx * size.x, self.offset.y + tz * size.y]);
                 let pos = rotation * Vec3::new(px, py, pz);
                 positions.push(pos);
                 uvs.push([tx, tz]);
@@ -186,6 +197,7 @@ impl Meshable for NoisyPlane3d {
             plane: *self,
             subdivisions: 0,
             sampler: NoiseSampler::None,
+            offset: Vec2::ZERO,
         }
     }
 }
