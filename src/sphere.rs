@@ -46,15 +46,17 @@ pub struct NoisySphereMeshBuilder {
     pub kind: NoisySphereKind,
     pub sampler: NoiseSampler,
     pub sphere: NoisySphere,
+    pub offset: Vec3A,
 }
 
 impl NoisySphereMeshBuilder {
     #[inline]
     pub fn new(radius: f32, kind: NoisySphereKind) -> Self {
         Self {
+            kind,
             sampler: NoiseSampler::None,
             sphere: NoisySphere::new(radius),
-            kind,
+            offset: Vec3A::ZERO,
         }
     }
 
@@ -71,12 +73,46 @@ impl NoisySphereMeshBuilder {
         self
     }
 
+    #[inline]
+    pub fn offset(mut self, offset: impl Into<Vec3A>) -> Self {
+        self.offset = offset.into();
+        self
+    }
+
     fn cube(&self, subdivisions: u32) -> Mesh {
-        mesh(&self.sampler, &self.sphere, CubeSphere::new(subdivisions as _, uv_transform), 12)
+        self.mesh(CubeSphere::new(subdivisions as _, uv_transform), 12)
     }
 
     fn ico(&self, subdivisions: u32) -> Mesh {
-        mesh(&self.sampler, &self.sphere, IcoSphere::new(subdivisions as _, uv_transform), 20)
+        self.mesh(IcoSphere::new(subdivisions as _, uv_transform), 20)
+    }
+
+    fn mesh<S: BaseShape>(
+        &self,
+        base: Subdivided<[f32; 2], S>,
+        faces: usize
+    ) -> Mesh {
+
+        let points = base.raw_points()
+            .iter()
+            .map(|&point| sample_at(&self.sampler, self.offset + point, self.sphere.radius).into())
+            .collect::<Vec<[f32; 3]>>();
+
+        let indices = {
+            let mut indices = Vec::with_capacity(base.indices_per_main_triangle() * faces);
+            for i in 0..faces {
+                base.get_indices(i, &mut indices);
+            }
+            Indices::U32(indices)
+        };
+
+        let uvs = base.raw_data().to_owned();
+
+        Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::all())
+            .with_inserted_indices(indices)
+            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, points)
+            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+            .with_computed_normals()
     }
 }
 
@@ -119,33 +155,4 @@ fn uv_transform(point: Vec3A) -> [f32; 2] {
     let norm_inclination = inclination / PI;
     let norm_azimuth = 0.5 - (azimuth / TAU);
     [norm_azimuth, norm_inclination]
-}
-
-fn mesh<S: BaseShape>(
-    sampler: &NoiseSampler,
-    sphere: &NoisySphere,
-    base: Subdivided<[f32; 2], S>,
-    faces: usize
-) -> Mesh {
-
-    let points = base.raw_points()
-        .iter()
-        .map(|&point| sample_at(sampler, point, sphere.radius).into())
-        .collect::<Vec<[f32; 3]>>();
-
-    let indices = {
-        let mut indices = Vec::with_capacity(base.indices_per_main_triangle() * faces);
-        for i in 0..faces {
-            base.get_indices(i, &mut indices);
-        }
-        Indices::U32(indices)
-    };
-
-    let uvs = base.raw_data().to_owned();
-
-    Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::all())
-        .with_inserted_indices(indices)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, points)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
-        .with_computed_normals()
 }
