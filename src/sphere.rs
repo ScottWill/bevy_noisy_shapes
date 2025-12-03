@@ -118,7 +118,7 @@ impl NoisySphereMeshBuilder {
             let point = sample_at(point, &self.sampler, self.offset, self.sphere.radius);
             points.push(point.into());
             if self.vertex_colors {
-                let hue = (point.y * 360.0) % 360.0;
+                let hue = (point.length() * 360.0) % 360.0;
                 colors.push(Color::hsl(hue, 1.0, 0.5).to_srgba().to_f32_array());
             }
         }

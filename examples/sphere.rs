@@ -39,10 +39,11 @@ fn setup_shape(
 ) {
     commands.spawn((
         MeshMaterial3d(materials.add(StandardMaterial::default())),
-        Mesh3d(meshes.add(NoisySphere::new(12.0)
+        Mesh3d(meshes.add(NoisySphere::new(7.0)
             .mesh()
             .kind(NoisySphereKind::Cubed { subdivisions: 64 })
             .sampler(PerlinNoiseBuilder {
+                amplitude: -0.02,
                 fractal_noise: Some(FractalNoiseBuilder {
                     fractal_type: FractalType::RigidMulti,
                     gain: 1.3,
