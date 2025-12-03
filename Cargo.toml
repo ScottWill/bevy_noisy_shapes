@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { version = "0.17.3", default-features = false, features = ["bevy_asset", "bevy_pbr"]}
-fastnoise = { path = "../fastnoise" }
+bevy = { version = "0.17.3", default-features = false, features = ["bevy_asset", "bevy_pbr"] }
+fastnoise = { git = "https://github.com/ScottWill/fastnoise" }
 hexasphere = "16.0.0"
 
 [dev-dependencies]
