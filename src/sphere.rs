@@ -41,12 +41,25 @@ impl Default for NoisySphereKind {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct NoisySphereMeshBuilder {
     pub kind: NoisySphereKind,
     pub sampler: NoiseSampler,
     pub sphere: NoisySphere,
     pub offset: Vec3A,
+    pub vertex_colors: bool,
+}
+
+impl Default for NoisySphereMeshBuilder {
+    fn default() -> Self {
+        Self {
+            kind: NoisySphereKind::default(),
+            sampler: NoiseSampler::None,
+            sphere: NoisySphere::default(),
+            offset: Vec3A::ZERO,
+            vertex_colors: false
+        }
+    }
 }
 
 impl NoisySphereMeshBuilder {
@@ -54,9 +67,8 @@ impl NoisySphereMeshBuilder {
     pub fn new(radius: f32, kind: NoisySphereKind) -> Self {
         Self {
             kind,
-            sampler: NoiseSampler::None,
             sphere: NoisySphere::new(radius),
-            offset: Vec3A::ZERO,
+            ..Default::default()
         }
     }
 
@@ -68,14 +80,20 @@ impl NoisySphereMeshBuilder {
     }
 
     #[inline]
-    pub fn sampler(mut self, sampler: NoiseSampler) -> Self {
-        self.sampler = sampler;
+    pub fn sampler(mut self, sampler: impl Into<NoiseSampler>) -> Self {
+        self.sampler = sampler.into();
         self
     }
 
     #[inline]
     pub fn offset(mut self, offset: impl Into<Vec3A>) -> Self {
         self.offset = offset.into();
+        self
+    }
+
+    #[inline]
+    pub fn vertex_colors(mut self, vertex_colors: bool) -> Self {
+        self.vertex_colors = vertex_colors;
         self
     }
 
@@ -92,11 +110,18 @@ impl NoisySphereMeshBuilder {
         base: Subdivided<[f32; 2], S>,
         faces: usize
     ) -> Mesh {
+        let num_vertices = base.raw_points().len();
 
-        let points = base.raw_points()
-            .iter()
-            .map(|&point| sample_at(point, &self.sampler, self.offset, self.sphere.radius).into())
-            .collect::<Vec<[f32; 3]>>();
+        let mut colors: Vec<[f32; 4]> = Vec::with_capacity(num_vertices);
+        let mut points: Vec<[f32; 3]> = Vec::with_capacity(num_vertices);
+        for &point in base.raw_points() {
+            let point = sample_at(point, &self.sampler, self.offset, self.sphere.radius);
+            points.push(point.into());
+            if self.vertex_colors {
+                let hue = (point.y * 360.0) % 360.0;
+                colors.push(Color::hsl(hue, 1.0, 0.5).to_srgba().to_f32_array());
+            }
+        }
 
         let indices = {
             let mut indices = Vec::with_capacity(base.indices_per_main_triangle() * faces);
@@ -108,11 +133,16 @@ impl NoisySphereMeshBuilder {
 
         let uvs = base.raw_data().to_owned();
 
-        Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::all())
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::all())
             .with_inserted_indices(indices)
             .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, points)
-            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
-            .with_computed_normals()
+            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+
+        if self.vertex_colors {
+            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
+        }
+
+        mesh.with_computed_normals()
     }
 }
 
@@ -144,8 +174,7 @@ impl From<NoisySphere> for Mesh {
 
 #[inline]
 fn sample_at(point: Vec3A, noise: &NoiseSampler, offset: Vec3A, radius: f32) -> Vec3A {
-    const DEVIATION: f32 = 0.2; // todo: move to final filter
-    point * radius * (1.0 + noise.sample3d(point - offset) * DEVIATION)
+    point * radius * (1.0 + noise.sample3d(point - offset))
 }
 
 #[inline]

@@ -22,7 +22,7 @@ impl Default for NoisyPlane3d {
 impl Primitive3d for NoisyPlane3d {}
 
 /// A builder used for creating a [`Mesh`] with a [`Plane3d`] shape.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct NoisyPlaneMeshBuilder {
     /// The [`Plane3d`] shape.
     pub plane: NoisyPlane3d,
@@ -39,6 +39,19 @@ pub struct NoisyPlaneMeshBuilder {
 
     pub sampler: NoiseSampler,
     pub offset: Vec2,
+    pub vertex_colors: bool,
+}
+
+impl Default for NoisyPlaneMeshBuilder {
+    fn default() -> Self {
+        Self {
+            plane: NoisyPlane3d::default(),
+            subdivisions: 0,
+            sampler: NoiseSampler::None,
+            offset: Vec2::ZERO,
+            vertex_colors: false,
+        }
+    }
 }
 
 impl NoisyPlaneMeshBuilder {
@@ -50,9 +63,7 @@ impl NoisyPlaneMeshBuilder {
                 normal,
                 half_size: size / 2.0,
             },
-            subdivisions: 0,
-            sampler: NoiseSampler::None,
-            offset: Vec2::ZERO,
+            ..Default::default()
         }
     }
 
@@ -64,9 +75,7 @@ impl NoisyPlaneMeshBuilder {
                 half_size: size / 2.0,
                 ..Default::default()
             },
-            subdivisions: 0,
-            sampler: NoiseSampler::None,
-            offset: Vec2::ZERO,
+            ..Default::default()
         }
     }
 
@@ -79,9 +88,7 @@ impl NoisyPlaneMeshBuilder {
                 half_size: Vec2::splat(length) / 2.0,
                 ..Default::default()
             },
-            subdivisions: 0,
-            sampler: NoiseSampler::None,
-            offset: Vec2::ZERO,
+            ..Default::default()
         }
     }
 
@@ -96,14 +103,12 @@ impl NoisyPlaneMeshBuilder {
         self
     }
 
-    /// Sets the size of the plane sampler.
     #[inline]
     pub fn offset(mut self, offset: Vec2) -> Self {
         self.offset = offset;
         self
     }
 
-    /// Sets the size of the plane mesh.
     #[inline]
     pub fn size(mut self, width: f32, height: f32) -> Self {
         self.plane.half_size = Vec2::new(width, height) * 0.5;
@@ -116,15 +121,6 @@ impl NoisyPlaneMeshBuilder {
         self
     }
 
-    /// Sets the subdivisions of the plane mesh.
-    ///
-    /// 0 - is the original plane geometry, the 4 points in the XZ plane.
-    ///
-    /// 1 - is split by 1 line in the middle of the plane on both the X axis and the Z axis,
-    ///     resulting in a plane with 4 quads / 8 triangles.
-    ///
-    /// 2 - is a plane split by 2 lines on both the X and Z axes, subdividing the plane into 3
-    ///     equal sections along each axis, resulting in a plane with 9 quads / 18 triangles.
     #[inline]
     pub fn subdivisions(mut self, subdivisions: u32) -> Self {
         self.subdivisions = subdivisions;
@@ -132,8 +128,14 @@ impl NoisyPlaneMeshBuilder {
     }
 
     #[inline]
-    pub fn sampler(mut self, sampler: NoiseSampler) -> Self {
-        self.sampler = sampler;
+    pub fn sampler(mut self, sampler: impl Into<NoiseSampler>) -> Self {
+        self.sampler = sampler.into();
+        self
+    }
+
+    #[inline]
+    pub fn vertex_colors(mut self, vertex_colors: bool) -> Self {
+        self.vertex_colors = vertex_colors;
         self
     }
 }
@@ -144,14 +146,12 @@ impl MeshBuilder for NoisyPlaneMeshBuilder {
         let x_vertex_count = self.subdivisions + 2;
         let num_vertices = (z_vertex_count * x_vertex_count) as usize;
         let num_indices = ((z_vertex_count - 1) * (x_vertex_count - 1) * 6) as usize;
-
-        let mut positions: Vec<Vec3> = Vec::with_capacity(num_vertices);
-        let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(num_vertices);
-        let mut indices: Vec<u32> = Vec::with_capacity(num_indices);
-
         let rotation = Quat::from_rotation_arc(Vec3::Y, *self.plane.normal);
         let size = self.plane.half_size * 2.0;
 
+        let mut colors: Vec<[f32; 4]> = Vec::with_capacity(num_vertices);
+        let mut positions: Vec<Vec3> = Vec::with_capacity(num_vertices);
+        let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(num_vertices);
         for z in 0..z_vertex_count {
             for x in 0..x_vertex_count {
                 let tx = x as f32 / (x_vertex_count - 1) as f32;
@@ -163,9 +163,14 @@ impl MeshBuilder for NoisyPlaneMeshBuilder {
                 let pos = rotation * Vec3::new(px, py, pz);
                 positions.push(pos);
                 uvs.push([tx, tz]);
+                if self.vertex_colors {
+                    let hue = (py * 360.0) % 360.0;
+                    colors.push(Color::hsl(hue, 1.0, 0.5).to_srgba().to_f32_array());
+                }
             }
         }
 
+        let mut indices: Vec<u32> = Vec::with_capacity(num_indices);
         for z in 0..z_vertex_count - 1 {
             for x in 0..x_vertex_count - 1 {
                 let quad = z * x_vertex_count + x;
@@ -178,14 +183,16 @@ impl MeshBuilder for NoisyPlaneMeshBuilder {
             }
         }
 
-        Mesh::new(
-            PrimitiveTopology::TriangleList,
-            RenderAssetUsages::default(),
-        )
-        .with_inserted_indices(Indices::U32(indices))
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
-        .with_computed_normals()
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::all())
+            .with_inserted_indices(Indices::U32(indices))
+            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+
+        if self.vertex_colors {
+            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
+        }
+
+        mesh.with_computed_normals()
     }
 }
 
@@ -195,9 +202,7 @@ impl Meshable for NoisyPlane3d {
     fn mesh(&self) -> Self::Output {
         NoisyPlaneMeshBuilder {
             plane: *self,
-            subdivisions: 0,
-            sampler: NoiseSampler::None,
-            offset: Vec2::ZERO,
+            ..Default::default()
         }
     }
 }
