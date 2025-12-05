@@ -7,6 +7,17 @@ edition = "2024"
 bevy = { version = "0.17.3", default-features = false, features = ["bevy_asset", "bevy_pbr"] }
 fastnoise = { git = "https://github.com/ScottWill/fastnoise" }
 hexasphere = "16.0.0"
+serde = { version = "1.0.228", features = ["derive"], optional = true }
+
+[features]
+default = []
+persistence = ["serde", "fastnoise/persistence"]
 
 [dev-dependencies]
-bevy = "0.17.3"
+bevy = { version = "0.17.3", default-features = false, features = [
+    "bevy_mesh_picking_backend",
+    "bevy_pbr",
+    "bevy_winit",
+    "tonemapping_luts",
+    "zstd_rust"
+] }
